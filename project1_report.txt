@@ -1,0 +1,100 @@
+1. Basic information
+Student ID : 53649044
+Student Name : Clyton Dantis
+OS (bit) : Linux Ubuntu 18.04
+gcc version : 5.4.0
+
+
+2. Internal Record Format
+- Show your record format design and describe how your design satisfies O(1) field access. If not, just mention that you haven't implemented this feature.
+|--------+--------+--------+--------+--------+--------+-----+----------+-----------+----------+-----------+---------------------------|
+| Bytes  | 0    1 |      3 |      5 |      7 |      9 |  10 |       14 |        18 |       22 |        26 | 56                        |
+| ---->  |        |        |        |        |        |     |          |           |          |           |                           |
+|--------+--------+--------+--------+--------+--------+-----+----------+-----------+----------+-----------+---------------------------|
+| Labels | #Cols  | Ptr-F1 | Ptr-F2 | Ptr-F3 | Ptr-F4 | NIA | F1 - Int | F2 - Real | F3 - Int | F4 - VLen | F4 - Actual Var Char Data |
+|--------+--------+--------+--------+--------+--------+-----+----------+-----------+----------+-----------+---------------------------|
+| Values | 4      |     14 |     18 |     22 |     26 |   0 |       20 |     100.1 |        2 |        30 | hello world               |
+|--------+--------+--------+--------+--------+--------+-----+----------+-----------+----------+-----------+---------------------------|
+# LEGENDS
+#Cols   : Number of fields/columns in record
+Ptr-F1  : Pointer to Field F1
+NIA     : Null Indicator Array. Its size is determined by the formula ceil(#cols/8)
+F4-Vlen : Length of the Var starting at bit 27
+
+
+Explanation:
+In order to satisfy the O(1) requirement, the above record stores offset value for each field in  bits 3-9.
+The offset value stores the start address of a field.
+Each pointer occupies 2 bytes. With this organization the nth field's start location can be derived by  
+startPtr + *(startPtr + n * 2) where 'startPtr' is the starting address of the record obtained from the slot directory.
+
+
+- Describe how you store a VarChar field.
+To store the VarChar field, store the length of the field in 4 bytes followed by the actual string.
+
+3. Page Format
+- Show your page format
+|---------+---------+---------+----+---------+--------------------------------------------------------------------------------------------------|
+| N       | R       | W       | A  |         |                                                                                                  |
+| U       | E       | R       | P  |         |                                                                                                  |
+| M       | A       | I       | P  |         | <---- MetaData/hidden data                                                                       |
+| B       | D       | T       | E  |         |                                                                                                  |
+| E       |         | E       | N  |         | This region is initialized in the method createFile() and updated on every closeFile().          |
+| R       | C       |         | D  |         | It stores four variables: numberOfPages, readPageCounter, writePageCounter and appendPageCounter |
+|         | O       | C       |    |         | Size : 16 bytes.                                                                                 |
+| O       | U       | O       | C  |         |                                                                                                  |
+| F       | N       | U       | O  |         |                                                                                                  |
+| P       | T       | N       | U  |         |                                                                                                  |
+| A       | E       | T       | N  |         |                                                                                                  |
+| G       | R       | E       | T  |         |                                                                                                  |
+| E       |         | R       | E  |         |                                                                                                  |
+| S       |         |         | R  |         |                                                                                                  |
+|---------+---------+---------+----+---------+--------------------------------------------------------------------------------------------------|
+| *******************************************| <----Page 0 : The start of this page is stored in a pointer called PAGE_START. This allows       |
+| **********************#####################| for the abstraction of the hidden data. Each page is 4096 bytes long. The records are inserted   |
+| ########################################## | starting from the 0th field while the record directory data starts growing from the 4095th field |                                |
+|         |         |         |    |         |                                                                                                  |
+|         |         |         |    |         |                                                                                                  |
+|--------------------------------------------|                                                                                                  |
+|         |         |         |    | LENGTH# |                                                                                                  |
+|--------------------------------------------|                                                                                                  |
+| OFFSET# | LENGTH* | OFFSET* | FS | N       |                                                                                                  |
+|---------+---------+---------+----+---------+--------------------------------------------------------------------------------------------------|
+
+
+The page format features a record directory and slot directories at the end of each page. The record directory structure
+consists of two fields FS and N representing the 'Free Space' pointer and 'N'umber of records inserted in the page 
+respectively. The slot directory structure has two fields: 'Offset' storing the start position of a record and 'Length' which 
+stores the length of that record. The slot directory structure keeps growing in reverse direction to the records being 
+inserted in the page i.e The records are inserted from the 0th position and growing to the right of the page while the slot directories
+get added to the left end of the page. Each variable in the record directory and slot directory occupies 2 bytes of data. For n records, 
+the amount of space required for the directories would be 4(n + 1). 
+
+OFFSET* refers to start position of the first record denoted by * in Page 0. Similarly 
+OFFSET# refers to the start position of second record denoted by #. Each record has a slot directory(OFFSET, LENGTH) 
+that allows O(1) access to the record. 
+
+4. Implementation Detail
+- Other implementation details goes here.
+Page creation and manipulation: A page based file is created using the PageFileManger::createFile method. This method initializes the page stats of the file 
+at the time of creation. These stats include number of pages, number of page reads, number of page writes and number of page appends. Every time
+the file is opened using PageFileManager::openFile(const string &fileName, FileHandle &fileHandle), fileHandle's loadStats method is invoked
+which loads these page statistics in the FileStats structure for easy manipulation. When PageFileManager::closeFile method gets invoked the
+updated page statistics get written to the hidden page. C's fseek, fwrite, fread functions are used to perform file i/o operations.
+
+Record Insertion: In order to insert a record the following steps are carried out.
+i) Find the size required to store the record in the internal format. Use recordDescriptor to find the data type and size of the int and
+flot fields. For the varchar fields, read the length of the field from the void memory buffer using memcpy. Parse the fields in the void data 
+buffer and create a field pointer array. Create the internal record format buffer. 
+ii) Find the page to store the record. Scan all pages in the file starting from the 0th page and get the first page which has free
+space available to store the record. 'Free Space Available = PAGE_SIZE - freeSpacePosition - 4(n+1) - 4' where n is the number of
+existing records. 
+iii) Once the page is found, insert record at freeSpacePointer position using FileHandle::writePage. And update the directory information 
+    newSlot.offset = freeSpacePtr;
+    newSlot.length = recordLength;
+    freeSpacePtr += recordLength;
+iv) Return RID of the new record. RID (pageNum, newSlot#) of the page where the record was inserted
+
+
+5. Other (optional)
+- Freely use this section to tell us about things that are related to the project 1, but not related to the other sections (optional)

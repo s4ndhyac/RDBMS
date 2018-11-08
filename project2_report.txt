@@ -1,0 +1,173 @@
+1. Basic information
+
+Team number: 29
+
+#1 Student ID : 53649044 
+#1 Student Name : Clyton Dantis 
+OS (bit) : Linux Ubuntu 18.04 
+gcc version : 5.4.0
+
+#2 Student ID : 61167891 
+#2 Student Name : Sandhya Chandramohan 
+OS (bit) : MacOS High Sierra 10.13 
+gcc version : 5.4.0
+
+2. Meta-data
+- Show your meta-data design (Tables and Columns table) and information about each column.
+
+* 'Tables' Catalog table schema
+
+| table-type:int | table-id:int | table-name:varchar(50) | file-name:varchar(50) |
+|----------------+--------------+------------------------+-----------------------|
+| SYSTEM=0       |            1 | Tables                 | Tables.tbl            |
+| SYSTEM=0       |            2 | Columns                | Columns.tbl           |
+| USER=1         |            3 | Employee               | Employee.tbl          |
+
+The table type column decides whether user has privilege to update those tables.
+The file name column stores information about the file where actual records of that table are stored.
+
+
+* 'Columns' Catalog table design
+
+| table-id:int | column-name:varchar(50) | column-type:int | column-length:int | column-position:int |
+|--------------+-------------------------+-----------------+-------------------+---------------------|
+|            1 | table-id                | TypeInt         |                 4 |                   1 |
+|            1 | table-name              | TypeVarChar     |                50 |                   2 |
+|            1 | file-name               | TypeVarChar     |                50 |                   3 |
+|            2 | table-id                | TypeInt         |                 4 |                   1 |
+|            2 | column-name             | TypeVarChar     |                50 |                   2 |
+|            2 | column-type             | TypeInt         |                 4 |                   3 |
+|            2 | column-length           | TypeInt         |                 4 |                   4 |
+|            2 | column-position         | TypeInt         |                 4 |                   5 |
+|            3 | empname                 | TypeVarChar     |                30 |                   1 |
+|            3 | age                     | TypeInt         |                 4 |                   2 |
+|            3 | height                  | TypeReal        |                 4 |                   3 |
+|            3 | salary                  | TypeInt         |                 4 |                   4 |
+
+table-id: This column maps a row in the Columns' table catalog to the table name in Tables catalog
+column-name: attribute names of a table
+column-type: TypeInt, TypeVarChar and TypeReal are enums representing an int value
+column-length: Gives length information about each attribute in a table
+column-position : This gives information about the field position of a table attribute
+
+
+3. Internal Record Format
+
+Design
+
++--------+-------+------------------+---------------+-------+-------+-------+-------+-------------+----------+-----------+----------+---------------------+--------------------+
+| Bytes  | 0   1 |         2        | 3         6   | 7     | 9     | 11    | 13    |      15     | 16       | 20        | 24       | 28                  | 32                 |
++--------+-------+------------------+---------------+-------+-------+-------+-------+-------------+----------+-----------+----------+---------------------+--------------------+
+| Labels | #Cols | Tombstone Indtr. | Tombstone RID | Ptr-1 | Ptr-2 | Ptr-3 | Ptr-4 | Null Indtr. | F1 - Int | F2 - Real | F3 - Int | F4 - Varchar Length | F4 - Varchar Value |
++--------+-------+------------------+---------------+-------+-------+-------+-------+-------------+----------+-----------+----------+---------------------+--------------------+
+| Values |   4   |         0        |       0       |   16  |   20  |   24  |   28  |      0      |    20    |    12.1   |    23    |          11         | hello world        |
++--------+-------+------------------+---------------+-------+-------+-------+-------+-------------+----------+-----------+----------+---------------------+--------------------+
+
+LEGENDS 
+#Cols : Number of fields/columns in record
+Tombstone Indtr. : Tombstone Indicator
+Tombstone RID : RID of the record when Tombstone Indicator is set to 1
+Ptr-F1 : Pointer to Field F1
+Null Indtr. : Null Indicator Array. Its size is determined by the formula ceil(#cols/8)
+F4- Varchar Length : Length of the Var starting at bit 28
+
+The format is as follows -> 
+2 bytes of -> No. of columns
+1 bytes Tombstone indicator that is set to 1 if the length of the updated record can not be fit in the current page 
+4 bytes of RID -> (holding the pageNum and slotNum) of the location of the updated record
+Null Indicator Array -> 1 byte holding the Null indicator Array -> Corresponding bit of a field is set to 1 if the field is null
+Field Pointer Indicator Array -> (2 bytes * Number of Fields) -> Each field of the Field Pointer Array holds the offset location of a field of the record. This results in O(1) field access.
+
+Fields -> 
+Int Field -> 4 bytes 
+Real Field -> 4 bytes
+Varchar Field -> 4 bytes of length of array followed by the value of the archer field
+
+Update -> 
+1. If the length of the updated record is less than the length of the old record then, it is written from the offset of the old record. The records following the updated record are shifted to the left. And the slot directory offset of all the records updated and freeSpacePosition updated.
+2. If the length of the updated record is more than the length of the old record ->
+a. If there is space in the current page to hold the updated record -> The records following the record to be updated are shifted by the diff amount (new record length - old record length) to the right. Following this the record to be updated is updated with the new record. And all the record's slot directories are updated with the offset.
+B. If there isn't space in the current page -> The new record data is inserted in the next available page with enough free space and the RID of the position at which this record is inserted is updated in the old records Tombstone RID location and the Tombstone RID of the old record is set to 1. Also the old record is compacted, and all records following it are shifted to the left upto the tombstone RID location.
+
+Delete ->
+The RID of the record to be deleted is found. Then, the offset of the record to be deleted is set to USHRT_MAX = 65,535. Following this:
+1. If the record to be deleted is the last record in the page -> The free space pointer of the page is updated by the diff amount of length of the record to be deleted and the slot to be deleted offset set to USHRT_MAX
+2. If the record to be deleted is not the last record in the page -> The records following the record to be deleted are shifted to the left and their slot directories are updated with the new offsets. The free space pointer of the page is updated by the diff amount of length of the record to be deleted and the slot to be deleted offset set to USHRT_MAX.
+
+
+4. Page Format
+
+Design 
+
+|---------+---------+---------+----+---------+--------------------------------------------------------------------------------------------------|
+| N       | R       | W       | A  |         |                                                                                                  |
+| U       | E       | R       | P  |         |                                                                                                  |
+| M       | A       | I       | P  |         | <---- MetaData/hidden data                                                                       |
+| B       | D       | T       | E  |         |                                                                                                  |
+| E       |         | E       | N  |         | This region is initialized in the method createFile() and updated on every closeFile().          |
+| R       | C       |         | D  |         | It stores four variables: numberOfPages, readPageCounter, writePageCounter and appendPageCounter |
+|         | O       | C       |    |         | Size : 16 bytes.                                                                                 |
+| O       | U       | O       | C  |         |                                                                                                  |
+| F       | N       | U       | O  |         |                                                                                                  |
+| P       | T       | N       | U  |         |                                                                                                  |
+| A       | E       | T       | N  |         |                                                                                                  |
+| G       | R       | E       | T  |         |                                                                                                  |
+| E       |         | R       | E  |         |                                                                                                  |
+| S       |         |         | R  |         |                                                                                                  |
+|---------+---------+---------+----+---------+--------------------------------------------------------------------------------------------------|
+| *******************************************| <----Page 0 : The start of this page is stored in a pointer called PAGE_START. This allows       |
+| **********************#####################| for the abstraction of the hidden data. Each page is 4096 bytes long. The records are inserted   |
+| ########################################## | starting from the 0th field while the record directory data starts growing from the 4095th field |                                |
+|         |         |         |    |         |                                                                                                  |
+|         |         |         |    |         |                                                                                                  |
+|--------------------------------------------|                                                                                                  |
+|         |         |         |    | LENGTH# |                                                                                                  |
+|--------------------------------------------|                                                                                                  |
+| OFFSET# | LENGTH* | OFFSET* | FS | N       |                                                                                                  |
+|---------+---------+---------+----+---------+--------------------------------------------------------------------------------------------------|
+
+
+Update-> If all the records in a page are updated then depending on whether the new records can be fit into the current page or not, the updated records will have tombstone indicators set to 1 and have the tombstones RIDs pointing to the new updated records position. And the records in the page will be compacted or expanded depending on the size of the new record.
+
+Delete-> If all the records in a page are deleted then the slot offset of each of the record in the slot directory will be set to USHRT_MAX = 65535 value. The free space position is incrementally reduced by the length of each deleted record, so finally the free space position will be at 0. The slot directory will still contain all the deleted slots with slot offset = USHRT_MAX. Page will be available for next insert or update of a new record.
+
+5. File Format
+
+Design
++-------------+------------+
+| Hidden Page | Pages 0    |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
++-------------+------------+
+|    Page 0   | 4096 bytes |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
++-------------+------------+
+|    Page 1   | 4096 bytes |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
+|             |            |
++-------------+------------+
+
+- Each file contains multiple pages.
+- The first page is the Hidden page of 16 bytes which stores the values of the number of pages, number of reads, number of writes, number of pages appended counts. 
+- Page 0 starts at the end of the hidden page. 
+- Each page is of 4096 bytes which is the PAGE_SIZE.
+
+
+6. Implementation Detail
+- The USER will not be able to alter the SYSTEM tables -> Tables.tbl and Columns.tbl
+- Given the table name, the table descriptor is first found ( Tables.tbl is scanned to get the table-id and Columns.tbl is scanned to find the Columns corresponding to table-id). 
+Following this a tuple is inserted, updated, deleted or read by calling the corresponding insert record, update record, delete record or read record functions from the recordBasedFileManager
+- The scan function, scans each record for the given condition starting from the first page, until a hit is found or the End of File is reached. 
