@@ -1,0 +1,112 @@
+1. Basic information
+Team number : 29
+
+#1 Student ID : 53649044 
+#1 Student Name : Clyton Dantis 
+OS (bit) : Linux Ubuntu 18.04 
+gcc version : 5.4.0
+
+#2 Student ID : 61167891 
+#2 Student Name : Sandhya Chandramohan 
+OS (bit) : MacOS High Sierra 10.13 
+gcc version : 5.4.0
+
+
+2. Catalog information about Index
+- Show your catalog information about an index (tables, columns).
+
+* 'Tables' Catalog table schema
+
+| table-type:int | table-id:int | table-name:varchar(50) | file-name:varchar(50) |
+|----------------+--------------+------------------------+-----------------------|
+| SYSTEM=0       |            1 | Tables                 | Tables.tbl            |
+| SYSTEM=0       |            2 | Columns                | Columns.tbl           |
+| SYSTEM=0       |            3 | Index                  | Index.tbl             |
+| USER=1         |            4 | Employee               | Employee.tbl          |
+
+The table type column decides whether user has privilege to update those tables.
+The file name column stores information about the file where actual records of that table are stored.
+
+
+* 'Columns' Catalog table design
+
+| table-id:int | column-name:varchar(50) | column-type:int | column-length:int | column-position:int |
+|--------------+-------------------------+-----------------+-------------------+---------------------|
+|            1 | table-id                | TypeInt         |                 4 |                   1 |
+|            1 | table-name              | TypeVarChar     |                50 |                   2 |
+|            1 | file-name               | TypeVarChar     |                50 |                   3 |
+|            2 | table-id                | TypeInt         |                 4 |                   1 |
+|            2 | column-name             | TypeVarChar     |                50 |                   2 |
+|            2 | column-type             | TypeInt         |                 4 |                   3 |
+|            2 | column-length           | TypeInt         |                 4 |                   4 |
+|            2 | column-position         | TypeInt         |                 4 |                   5 |
+|            3 | table-id                | TypeInt         |                 4 |                   1 |
+|            3 | index-name              | TypeVarChar     |                50 |                   2 |
+|            3 | index-file-name         | TypeVarChar     |                50 |                   3 |
+|            4 | empname                 | TypeVarChar     |                30 |                   1 |
+|            4 | age                     | TypeInt         |                 4 |                   2 |
+|            4 | height                  | TypeReal        |                 4 |                   3 |
+|            4 | salary                  | TypeInt         |                 4 |                   4 |
+
+table-id: This column maps a row in the Columns' table catalog to the table name in Tables catalog
+column-name: attribute names of a table
+column-type: TypeInt, TypeVarChar and TypeReal are enums representing an int value
+column-length: Gives length information about each attribute in a table
+column-position : This gives information about the field position of a table attribute
+
+* 'Index' Catalog table schema
+
+| table-id:int | index-name:varchar(50) | index-file-name:varchar(50) |
++--------------+------------------------+-----------------------------|
+|            5 | B                      | left2_B_idx                 |
+|            6 | C                      | right_C_idx                 |
+|            7 | B                      | right_B_idx                 |
+|            8 | B                      | largeleft2_B_idx            |
+
+
+- When the catalog is created, a file is created for the index catalog Index.tbl
+- table-id: This column maps a row in the Index table catalog to the table name in the Tables catalog
+- index-name: This is the same as the attribute name over which the index is created 
+-index-file-name: This is of the format tableName + _ + indexName + _ + idx. This refers to the name of the index file created for the corresponding index
+
+
+3. Block Nested Loop Join (If you have implemented this feature)
+- Describe how your block nested loop join works (especially, how you manage the given buffers.)
+* steps
+ Keep reading records from left table until we have read numPages and form in-memory hash table. Then read one record at a time from right table and probe the table. Store matching records in a queue and return the top record. Once all records in queue have been joined and returned, read next right tuple and repeat 
+ 
+ 
+4. Index Nested Loop Join (If you have implemented this feature)
+- For each record in left table, pick the join attribute and search for index in right table. Then return the matching rows and maintain state for next call
+
+
+5. Grace Hash Join (If you have implemented this feature)
+- Describe how your grace hash join works (especially, in-memory structure).
+Not implemented
+
+6. Aggregation
+- Describe how your aggregation (basic, group-based hash) works.
+Aggregation (Basic) -> 
+- The scan iterator, the attibute over which we are performing the aggregation and the aggregate operator are stored as data members in the Aggregate class
+- The iterator is used to call getNextTuple to read the tuple and get the value of the attribute over which we are performing the aggregation operation
+- The iteration is performed till the end of file
+- All aggregates (MAX, MIN, SUM, COUNT, AVERAGE) are calculated as float variables
+- They are then returned in the output format, consisting of 1 byte of Null Indicator, followed by 4 bytes of float data
+
+Aggregation (Group-based) -> Described below
+
+7. Implementation Detail
+- Have you added your own source file (.cc or .h)?
+No
+
+- Have you implemented any optional features? Then, describe them here.
+Yes.
+Aggregation (Group based hash) -> 
+- The scan iterator, the attribute over which we are performing the aggregation, the attribute over which we are grouping the aggregation and the aggregate operators are stored as data members in the Aggregate class
+- The grouped aggregates are stored as a map in the Aggregate class, with the key being the value of the groupBy attribute as a string and the value being the aggregate operations value for that group
+- The getNextTuple returns the next pair from the map in the format of the output (1 byte null indicator + (length of string + string value if varchar) value)
+
+- Other implementation details:
+- When an index is created on an attribute in a table-> the corresponding entry is created in the index catalog and all existing tuples in the table on which index  is created are indexed
+- When an index is destroyed -> all existing indexes are deleted on that attribute and the corresponding entry is deleted from the index catalog table
+- When a tuple is inserted/deleted in a table-> We first check if there exists an index on any attribute in the table by scanning the index catalog -> then we insert/delete the tuple and index the tuple on any attribute if required/ delete the index  

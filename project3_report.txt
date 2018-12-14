@@ -1,0 +1,119 @@
+1. Basic information
+Team number : 29
+
+#1 Student ID : 53649044 
+#1 Student Name : Clyton Dantis 
+OS (bit) : Linux Ubuntu 18.04 
+gcc version : 5.4.0
+
+#2 Student ID : 61167891 
+#2 Student Name : Sandhya Chandramohan 
+OS (bit) : MacOS High Sierra 10.13 
+gcc version : 5.4.0
+
+
+2. Meta-data page in an index file
++---------------+----------------+------------------+
+| ROOT PAGE NUM | Attribute Type | Attribute Length |
+|               |                |                  |
+|               |                |                  |
+|               |                |                  |
+|               |                |                  |
+|               |                |                  |
+|               |                |                  |
++---------------+----------------+------------------+
+|    4 bytes    | 4 bytes        |      4 bytes     |
++---------------+----------------+------------------+
+|                                                   |
+|                   4096 bytes                      |
+|                                                   |
++---------------+----------------+------------------+
+
+The following 3 metadata information is stored in a header page in the index file
+- The Root page number 
+- The Attribute Type of the index
+- The Attribute Length of the index
+
+The header page is 4096 bytes in size.
+
+3. Index Entry Format
+
+- Non-Leaf Node
+
++----------+-----+-----+-----------+
+| LEFT PTR | KEY | RID | RIGHT PTR |
++----------+-----+-----+-----------+
+|          |     |     |           |
++----------+-----+-----+-----------+
+|          |     |     |           |
++----------+-----+-----+-----------+
+
+The Non-leaf node entry has:
+- A Left Pointer pointing to the PageNum of the index page having keys less than itself
+- A Right Pointer pointing to the PageNum of the index page having keys greater than equal to itself
+- The Key can be any attribute type - Int, Real or Varchar. Varchar.
+- The format of a Varchar key is length (4 bytes) followed by the value of the key
+- The Key is followed by the RID of the indexed record which is (PageNum, SlotNum)
+
+- Leaf Node
+
++---------+---------+
+|   KEY   |   RID   |
++---------+---------+
+|         |         |
++---------+---------+
+|         |         |
++---------+---------+
+
+The Leaf node entry has:
+- A Key which can be of any attribute type - Int, Real, Varchar
+- The Key is followed by the RID of the indexed record which is (PageNum, SlotNum)
+
+4. Page Format
+
++-----------+--------------+---------+----------+---------+
+| PAGE TYPE | NEIGHBOR PTR |   L/I   |          |         |
++-----------+--------------+---------+----------+---------+
+|           |              |         |          |         |
++-----------+--------------+---------+----------+---------+
+|           |              |         |          |         |
++-----------+--------------+---------+----------+---------+
+|           |              |         |          | OFFSET* |
++-----------+--------------+---------+----------+---------+
+|  LENGTH*  |    OFFSET*   | LENGTH* |    FS    |    N    |
++-----------+--------------+---------+----------+---------+
+    <---------------------------------
+     Sorted Order of Slots
+
+- At the beginning of the page the Page Type is stored which is an enum of 4 bytes 
+having value LEAF = 0 for a Leaf page and INTERMEDIATE = 1 for a Non-Leaf page
+- The NEIGHBOR PTR in a Leaf Page points to the next Leaf page. It is not valid for a Non-Leaf page. 
+- The NEIGHBOR PTR has value UINT_MAX when in a Non-Leaf Page or in the last Leaf page before EOF
+- This is followed by the Leaf or Non-Leaf nodes in the design/format shared above
+- N - The no. of slots in the page
+- FS - The beginning of the Free Space in the page
+- The Slot Directory consisting of the LENGTH and OFFSET of each Leaf/Non-Leaf Intermediate entry 
+- The Slots in the Slot Directory are in sorted order
+
+
+5. Implementation Detail
+- Have you added your own source file (.cc or .h)?
+No have not added any new .cc or .h files.
+
+- Have you implemented non-lazy deletion? Choose Yes or No:
+No 
+
+- Have you implemented duplicated key handling that can span multiple pages? Choose Yes or No: 
+Yes.
+The Key and RID of the indexed record are together used to uniquely identify a key. 
+A Custom Comparator function compares on the basis of both Key and then on the basis of RID if Key is same to uniquely determine an entry
+The Leafs are also compared using the Custom Comparator function and then inserted in order in the Leaf page
+
+- Other implementation details:
+The BTPage class abstracts operations on the Index page. 
+The Entry class abstracts operations on the Entry. The Leaf and Non-Leaf entries inherit from the Entry class.
+The Key class abstracts operations on the Key. The 3 types of Keys, IntKey, StringKey and RealKey inherit from the Key class.
+For Insert we traverse to the Leaf node, keeping track of the intermediate nodes traversed in a stack in order to insert by splitting nodes in case there isn't enough space in the page. For searching keys in intermediate and leaf page, we use binary search. So at each node, binary search helps us find the right page to open
+The nodes in a page are inserted in sorted order by uniquely comparing them using both Key and RID using the Custom Comparator function
+For Delete, lazy deletion is implemented, where we traverse to the entry to be deleted, delete the entry and compact the slot directory and update the free space position and no. of slots in a page
+Scan, supports range queries between lowKey and highKey.
