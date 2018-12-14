@@ -1,8 +1,16 @@
 1. Basic information
+
+Basic information
+Student ID : 61167891
+Student Name : Sandhya Chandramohan
+OS (bit) : MacOS High Sierra 10.13
+gcc version : 5.4.0
+
 Student ID : 53649044
 Student Name : Clyton Dantis
 OS (bit) : Linux Ubuntu 18.04
 gcc version : 5.4.0
+
 
 
 2. Internal Record Format
