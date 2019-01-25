@@ -1,14 +1,14 @@
 1. Basic information
 Team number : 29
 
-#1 Student ID : 53649044 
-#1 Student Name : Clyton Dantis 
-OS (bit) : Linux Ubuntu 18.04 
+#1 Student ID : 61167891 
+#1 Student Name : Sandhya Chandramohan 
+OS (bit) : MacOS High Sierra 10.13 
 gcc version : 5.4.0
 
-#2 Student ID : 61167891 
-#2 Student Name : Sandhya Chandramohan 
-OS (bit) : MacOS High Sierra 10.13 
+#2 Student ID : 53649044 
+#2 Student Name : Clyton Dantis 
+OS (bit) : Linux Ubuntu 18.04 
 gcc version : 5.4.0
 
 
